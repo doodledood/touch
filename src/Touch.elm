@@ -1,84 +1,85 @@
-effect module Mouse where { subscription = MySub } exposing
+effect module Touch where { subscription = MySub } exposing
   ( Position, position
-  , clicks
+  , starts
   , moves
-  , downs, ups
+  , ends
+  , cancels
   )
 
-{-| This library lets you listen to global mouse events. This is useful
+{-| This library lets you listen to global touch events. This is useful
 for a couple tricky scenarios including:
 
-  - Detecting a "click" outside the current component.
+  - Detecting a "touch" outside the current component.
   - Supporting drag-and-drop interactions.
 
-# Mouse Position
+# Touch Position
 @docs Position, position
 
 # Subscriptions
-@docs clicks, moves, downs, ups
+@docs starts, moves, ends, cancels
 
 -}
 
 import Dict
 import Dom.LowLevel as Dom
-import Json.Decode as Json exposing ((:=))
+import Json.Decode as Json exposing ((:=), at)
 import Process
 import Task exposing (Task)
-
+import Maybe
 
 
 -- POSITIONS
 
 
-{-| The position of the mouse relative to the whole document. So if you are
+{-| The position of the touch relative to the whole document. So if you are
 scrolled down a bunch, you are still getting a coordinate relative to the
 very top left corner of the *whole* document.
 -}
 type alias Position =
-  { x : Int
-  , y : Int
+  { x : Maybe Int
+  , y : Maybe Int
   }
 
 
-{-| The decoder used to extract a `Position` from a JavaScript mouse event.
+{-| The decoder used to extract a `Position` from a JavaScript touch event.
 -}
 position : Json.Decoder Position
 position =
-  Json.object2 Position ("pageX" := Json.int) ("pageY" := Json.int)
+  Json.object2 Position 
+    (Json.maybe (at ["touches", "0", "clientX"] Json.int)) 
+    (Json.maybe (at ["touches", "0", "clientY"] Json.int))
 
 
+-- Touch EVENTS
 
--- MOUSE EVENTS
 
-
-{-| Subscribe to mouse clicks anywhere on screen.
+{-| Subscribe to touch starts anywhere on screen.
 -}
-clicks : (Position -> msg) -> Sub msg
-clicks tagger =
-  subscription (MySub "click" tagger)
+starts : (Position -> msg) -> Sub msg
+starts tagger =
+  subscription (MySub "touchstart" tagger)
 
 
-{-| Subscribe to mouse moves anywhere on screen. It is best to unsubscribe if
+{-| Subscribe to touche moves anywhere on screen. It is best to unsubscribe if
 you do not need these events. Otherwise you will handle a bunch of events for
 no benefit.
 -}
 moves : (Position -> msg) -> Sub msg
 moves tagger =
-  subscription (MySub "mousemove" tagger)
+  subscription (MySub "touchmove" tagger)
 
 
-{-| Get a position whenever the user *presses* the mouse button.
+{-| Get a position whenever the user *lifts* his finger.
 -}
-downs : (Position -> msg) -> Sub msg
-downs tagger =
-  subscription (MySub "mousedown" tagger)
+ends : (Position -> msg) -> Sub msg
+ends tagger =
+  subscription (MySub "touchend" tagger)
 
-
-{-| Get a position whenever the user *releases* the mouse button.
+{-| Get a position whenever the touch ended for some other reason.
 -}
-ups : (Position -> msg) -> Sub msg
-ups tagger =
-  subscription (MySub "mouseup" tagger)
+cancels : (Position -> msg) -> Sub msg
+cancels tagger =
+  subscription (MySub "touchcancel" tagger)
 
 
 
@@ -207,4 +208,3 @@ onSelfMsg router {category,position} state =
           `Task.andThen` \_ ->
 
         Task.succeed state
-
